@@ -1,54 +1,84 @@
-# Real Estate Price Prediction (부동산 실거래가 가격 예측)
+# Real Estate Price Prediction (인천광역시 부동산 실거래가 예측 프로젝트) 2025.11.6
 
 ## 프로젝트 개요
-본 프로젝트는 **국토교통부 실거래가 공개시스템**에서 제공하는 아파트 실거래 데이터를 기반으로,
-부동산 가격을 예측하고 가격에 영향을 미치는 주요 요인을 분석하는 것을 목표로 한다.
-
+본 프로젝트는 **국토교통부 실거래가 공개시스템**에서 제공하는 아파트 매매 실거래 데이터를 기반으로,  
+**주택 가격을 예측하고 지역별 시세 추세를 분석**하기 위해 진행되었다.  
+2025년 2월부터 2025년 11월 현재까지의 인천광역시 아파트 실거래 데이터를 수집하여  
+머신러닝 회귀모델(Random Forest)을 구축하였으며,  
+추가적으로 **단기 시계열 예측(6개월 후 시세 전망)**을 수행하였다.
 
 - 데이터 출처: [국토교통부 실거래가 공개시스템](https://rt.molit.go.kr/)
-- 분석 대상: 아파트 매매 실거래 (2020~2025)
-- 주요 기능:
-  1. 데이터 전처리 및 탐색적 분석 (EDA)
-  2. 머신러닝 기반 가격 예측 모델 구축
-  3. 변수 중요도 분석 (어떤 요인이 가격에 영향을 미치는가?)
-  4. 결과 시각화 및 해석
+- 분석 대상: 인천광역시 아파트 매매 실거래 (2025년 2월~10월)
+- 데이터 형식: 월별 CSV 파일 (9개 병합)
+- 데이터 수: 약 23,000건
 
 ---
 
 ## 데이터 설명
-예시 컬럼 (CSV 원본 기준):
-- `거래금액(만원)`
-- `건축년도`
-- `전용면적(㎡)`
-- `층`
-- `법정동`
-- `년`, `월`, `일`
+주요 컬럼 (CSV 원본 기준):
 
-추가 생성 변수:
-- `건물나이` = (현재년도 - 건축년도)
-- `거래연월` = (년-월) 형태 시계열 변수
+| 컬럼명 | 설명 |
+|--------|------|
+| `시군구` | 거래 지역 (예: 인천광역시 서구 연희동) |
+| `단지명` | 아파트 단지명 |
+| `전용면적(㎡)` | 전용면적 |
+| `층` | 층수 |
+| `건축년도` | 준공년도 |
+| `거래금액(만원)` | 실제 거래금액 (만원 단위) |
+| `계약년월` | 거래가 발생한 연·월 (시계열 분석용) |
 
 ---
 
-## 분석 방법론
-1. **전처리**  
-   - 거래금액 문자열 → 숫자 변환  
-   - 건물 나이, 거래연월 등 파생 변수 생성  
-   - 이상치 제거  
+## 데이터 전처리 과정
 
-2. **모델링**  
-   - 선형 회귀 (Baseline)  
-   - 랜덤 포레스트 (비선형 관계 반영)  
-   - XGBoost (성능 향상)  
+1. **파일 병합**
+   
+   ```python
+   import pandas as pd
+   import glob
 
-3. **평가 지표**  
-   - MAE (Mean Absolute Error)  
-   - RMSE (Root Mean Squared Error)  
-   - R² Score  
+   files = glob.glob("/content/아파트(매매)_실거래가_25_*.csv")
+   df_list = []
 
-4. **시각화**  
-   - 지역별 평균 거래가 추세  
-   - 실제 vs 예측값 비교  
-   - 변수 중요도 그래프  
+   for f in files:
+       temp = pd.read_csv(f, encoding='cp949', skiprows=15)
+       temp.columns = temp.columns.str.strip()
+       df_list.append(temp)
+
+   df = pd.concat(df_list, ignore_index=True)
+   print("병합 완료, 총 행 수:", len(df))
+   ```
+   
+2.정재 작업
+
+    # 주요 컬럼 선택
+    df_model = df[['시군구', '단지명', '전용면적(㎡)', '층', '건축년도', '거래금액(만원)']].copy()
+    
+    # 거래금액 문자열 → 숫자 변환
+    df_model['거래금액(만원)'] = (
+        df_model['거래금액(만원)']
+        .astype(str)
+        .str.replace(',', '')
+        .str.replace(' ', '')
+    )
+    df_model['거래금액(만원)'] = pd.to_numeric(df_model['거래금액(만원)'], errors='coerce')
+    
+    # 결측치 제거
+    df_model = df_model.dropna()
+    print("전처리 후 행 수:", len(df_model))
+
+3.범주형 인수 인코딩
+
+    from sklearn.preprocessing import LabelEncoder
+
+    le_gu = LabelEncoder()
+    le_danji = LabelEncoder()
+    
+    df_model['시군구_enc'] = le_gu.fit_transform(df_model['시군구'])
+    df_model['단지명_enc'] = le_danji.fit_transform(df_model['단지명'])
+
+---
+
+##모델링
 
 
