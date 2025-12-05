@@ -1,135 +1,129 @@
-# Real Estate Price Prediction (인천광역시 부동산 실거래가 예측 프로젝트) 2025.11.6
-
-## 프로젝트 개요
-본 프로젝트는 **국토교통부 실거래가 공개시스템**에서 제공하는 아파트 매매 실거래 데이터를 기반으로,  
-**주택 가격을 예측하고 지역별 시세 추세를 분석**하기 위해 진행되었다.  
-2025년 2월부터 2025년 11월 현재까지의 인천광역시 아파트 실거래 데이터를 수집하여  
-머신러닝 회귀모델(Random Forest)을 구축하였으며,  
-추가적으로 **단기 시계열 예측(6개월 후 시세 전망)**을 수행하였다.
-
-- 데이터 출처: [국토교통부 실거래가 공개시스템](https://rt.molit.go.kr/)
-- 분석 대상: 인천광역시 아파트 매매 실거래 (2025년 2월~10월)
-- 데이터 형식: 월별 CSV 파일 (9개 병합)
-- 데이터 수: 약 23,000건
+# 인천 아파트 실거래가 분석 및 향후 6개월 예측 프로젝트  
+**기간:** 2023–2025년  
+**데이터 출처:** 국토교통부 실거래가 공개시스템  
 
 ---
 
-## 데이터 설명
-주요 컬럼 (CSV 원본 기준):
+## 1. 프로젝트 개요
+이 프로젝트는 **인천광역시 아파트 실거래가(2023~2025)** 데이터를 기반으로  
+- **실제 거래금액 전처리 및 구조화**  
+- **아파트 개별 가격 예측 모델(RandomForest)**  
+- **월별 평균 매매가 시계열 분석**  
+- **향후 6개월 가격 예측(Linear Regression + 이동평균)**  
 
-| 컬럼명 | 설명 |
+까지 수행한 데이터 분석 프로젝트입니다.
+
+---
+
+## 2. 데이터 전처리 과정
+
+### 주요 정제 작업
+- 거래금액(만원)에서 **문자 제거 → 숫자형 변환**
+- 시군구/단지명 문자열 정리 및 Label Encoding
+- 전용면적, 층, 건축년도 → 수치형 변환
+- 결측치 제거 후 약 **68,000건 유지**
+- 인천광역시 데이터만 필터링하여 최종 분석 수행
+
+---
+
+## 3. 개별 아파트 가격 예측 모델(Random Forest)
+
+### 입력 변수  
+| Feature | 설명 |
 |--------|------|
-| `시군구` | 거래 지역 (예: 인천광역시 서구 연희동) |
-| `단지명` | 아파트 단지명 |
-| `전용면적(㎡)` | 전용면적 |
-| `층` | 층수 |
-| `건축년도` | 준공년도 |
-| `거래금액(만원)` | 실제 거래금액 (만원 단위) |
-| `계약년월` | 거래가 발생한 연·월 (시계열 분석용) |
+| 전용면적(㎡) | 실사용 면적 |
+| 층 | 거래 층수 |
+| 건축년도 | 준공년도 |
+| 단지명_enc | 단지명 라벨 인코딩 |
+| 시군구_enc | 시군구 라벨 인코딩 |
+
+### 모델 성능  
+- **MAE(평균 절대 오차)**: 약 수백~수천만 원 수준  
+- **R²(설명력)**: 0.7~0.9 (데이터 분포에 따라 변동)
 
 ---
 
-## 데이터 전처리 과정
+## 4. 변수 중요도 분석
 
-1. **파일 병합**
-   
-   ```python
-   import pandas as pd
-   import glob
+RandomForest 기반 변수 영향력 결과 ↓
 
-   files = glob.glob("/content/아파트(매매)_실거래가_25_*.csv")
-   df_list = []
-
-   for f in files:
-       temp = pd.read_csv(f, encoding='cp949', skiprows=15)
-       temp.columns = temp.columns.str.strip()
-       df_list.append(temp)
-
-   df = pd.concat(df_list, ignore_index=True)
-   print("병합 완료, 총 행 수:", len(df))
-   ```
-   
-2.정재 작업
-
-    # 주요 컬럼 선택
-    df_model = df[['시군구', '단지명', '전용면적(㎡)', '층', '건축년도', '거래금액(만원)']].copy()
-    
-    # 거래금액 문자열 → 숫자 변환
-    df_model['거래금액(만원)'] = (
-        df_model['거래금액(만원)']
-        .astype(str)
-        .str.replace(',', '')
-        .str.replace(' ', '')
-    )
-    df_model['거래금액(만원)'] = pd.to_numeric(df_model['거래금액(만원)'], errors='coerce')
-    
-    # 결측치 제거
-    df_model = df_model.dropna()
-    print("전처리 후 행 수:", len(df_model))
-
-3.범주형 인수 인코딩
-
-    from sklearn.preprocessing import LabelEncoder
-
-    le_gu = LabelEncoder()
-    le_danji = LabelEncoder()
-    
-    df_model['시군구_enc'] = le_gu.fit_transform(df_model['시군구'])
-    df_model['단지명_enc'] = le_danji.fit_transform(df_model['단지명'])
+| 순위 | 변수 | 영향도 |
+|------|-------|--------|
+| 1 | 전용면적(㎡) | 가격 결정에 가장 큰 영향 |
+| 2 | 단지명_enc | 브랜드/위치 효과 반영 |
+| 3 | 층 | 중층 선호도 반영 |
+| 4 | 건축년도 | 연식 프리미엄 |
+| 5 | 시군구_enc | 지역 가격 격차 반영 |
 
 ---
 
-##모델링
+## 5. 인천 아파트 월별 평균 매매가 분석
 
-1. 회귀모델
+- 계약년월을 datetime 변수로 통일  
+- 월별 평균 가격 계산  
+- 3개월 이동평균으로 **추세선 보강**
 
-   ```
-      from sklearn.model_selection import train_test_split
-      from sklearn.ensemble import RandomForestRegressor
-      from sklearn.metrics import mean_absolute_error, r2_score
-      
-      X = df_model[['시군구_enc', '단지명_enc', '전용면적(㎡)', '층', '건축년도']]
-      y = df_model['거래금액(만원)']
-      
-      X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-      
-      model = RandomForestRegressor(n_estimators=300, random_state=42)
-      model.fit(X_train, y_train)
-      pred = model.predict(X_test)
-      
-      print("MAE (평균 절대 오차):", mean_absolute_error(y_test, pred))
-      print("R² (설명력):", r2_score(y_test, pred))
-   ```
-   
-2. 단지별 예측 함수
+---
 
-   ```
-      import numpy as np
+## 6. 향후 6개월 가격 예측
 
-      def predict_price(gu, danji, area, floor, year):
-          gu = str(gu).strip()
-          danji = str(danji).strip()
-      
-          try:
-              gu_code = le_gu.transform([gu])[0]
-          except ValueError:
-              print(f"[시군구 오류] '{gu}' 는 학습 데이터에 없습니다.")
-              return
-      
-          try:
-              danji_code = le_danji.transform([danji])[0]
-          except ValueError:
-              print(f"[단지명 오류] '{danji}' 는 학습 데이터에 없습니다.")
-              return
-      
-          X_new = np.array([[gu_code, danji_code, area, floor, year]])
-          price = model.predict(X_new)[0]
-      
-          print(f"{gu} {danji} 예상 거래금액: {price:,.0f}만원 (약 {price/10000:.2f}억 원)")
-          return price
-   ```
+### 예측 방법
+- **Linear Regression** 을 기반으로 전체 추세 학습  
+- 향후 6개월의 월평균 가격 점진적 예측  
+- 보조선: **3개월 이동평균(Trend Smoothing)**  
+- 예측 구간을 시각적으로 강조 (axvspan)
 
-3. 예시 실행
+---
+
+## 7. 분석 결과 요약
+
+### 시장 흐름
+- 2023~2025년 인천 아파트 평균 매매가는 전반적으로 완만한 상승 흐름  
+- 2024년 하반기 조정 이후 다시 안정적 상승 추세  
+- 이동평균으로 확인한 추세는 시계열의 변동성을 감소시켜 보다 안정적 패턴 확인 가능
+
+### 향후 6개월 전망
+- 전체적인 상승 추세를 따라 **완만한 상승 또는 횡보 전망**  
+- 외생 변수(금리·정책·입주 물량 등) 제외 모델이므로 참고용으로 적합  
+
+---
+
+## 8. 활용 가능성
+- 부동산 시장 분석 리포트 작성  
+- 지역별 가격 예측 서비스 모델 개발  
+- 정책 변화 전·후 가격 구조 분석 가능  
+- 단지별 가격 추정 시스템 기반 데이터로 활용 가능  
+
+---
+
+## 9. 주요 코드 구조
+
+### 데이터 로딩 및 전처리
+```python
+df = pd.read_csv(file_path, encoding='utf-8-sig')
+df_ic = df[df['시군구'].str.contains("인천광역시")]
+```
+
+### RandomForest 가격 예측 모델
+```python
+model = RandomForestRegressor(n_estimators=300, random_state=42)
+model.fit(X_train, y_train)
+```
+
+### 월별 평균 + 미래 6개월 예측
+```python
+model_ts.fit(monthly[['index']], monthly['월평균가격(만원)'])
+future_pred = model_ts.predict(future_idx.reshape(-1, 1))
+```
+
+### 시각화 (실제·이동평균·예측 포함)
+```python
+plt.plot(monthly['계약년월'], monthly['월평균가격(만원)'])
+plt.plot(monthly['계약년월'], monthly['월평균_3개월이동'])
+plt.plot(future_plot['계약년월'], future_plot['월평균가격_예측(만원)'])
+```
+
+
    ```
       predict_price('인천광역시 서구 청라동', '청라한라비발디', 84, 15, 2015)
       # 출력: 인천광역시 서구 청라동 청라한라비발디 예상 거래금액: 85,200만원 (약 8.52억 원
